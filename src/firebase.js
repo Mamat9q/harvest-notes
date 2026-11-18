@@ -5,7 +5,7 @@ import { getAuth, signInAnonymously } from "firebase/auth";
 import { initializeFirestore, persistentLocalCache, getFirestore } from "firebase/firestore";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 import { getRemoteConfig, fetchAndActivate, getString, getNumber } from "firebase/remote-config";
-import { firebaseConfig, recaptchaSiteKey, CONFIGURED, MODELS, LIMITS } from "./config.js";
+import { firebaseConfig, recaptchaSiteKey, CONFIGURED, MODELS, DEPRECATED_CLOUD_MODELS, LIMITS } from "./config.js";
 
 /**
  * Initialize Firebase. Returns { configured: false } when config.js still
@@ -59,6 +59,15 @@ export async function initFirebase() {
   try {
     await fetchAndActivate(rc);
     cloudModel = getString(rc, "cloud_model") || cloudModel;
+    // Guard: a stale Remote Config value naming a deprecated/shut-down
+    // model (SETUP.md originally set gemini-3.5-flash) must not override
+    // the current default — it failed live with HTTP 500 on 18 Nov 2026.
+    if (DEPRECATED_CLOUD_MODELS.has(cloudModel)) {
+      console.warn(
+        `Remote Config cloud_model "${cloudModel}" is deprecated/shut down; using ${MODELS.cloudDefault} instead.`
+      );
+      cloudModel = MODELS.cloudDefault;
+    }
     maxNoteChars = getNumber(rc, "max_note_chars") || maxNoteChars;
   } catch (e) {
     console.warn("Remote Config fetch failed, using defaults:", e);

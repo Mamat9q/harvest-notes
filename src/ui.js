@@ -5,6 +5,7 @@ import {
   createModel,
   generate,
   ensureDeviceModel,
+  isOverloadedError,
   summarizePrompt,
   tasksPrompt,
   askPrompt,
@@ -13,7 +14,7 @@ import {
   demoAnswer,
   SYSTEM_PROMPT,
 } from "./ai.js";
-import { LIMITS } from "./config.js";
+import { LIMITS, MODELS } from "./config.js";
 
 function escapeHtml(s) {
   return String(s)
@@ -30,8 +31,16 @@ export function initUI({ env, store, ai, cloudModel, maxNoteChars }) {
   const state = {
     notes: [],
     preference: "auto",
-    nano: "LanguageModel" in window || ("ai" in window && !!window.ai?.languageModel),
-    cloudModel: cloudModel || "gemini-3.5-flash",
+    // nano (routing): true ONLY when LanguageModel.availability() says the
+    // on-device model is actually on the device. The Prompt API object
+    // existing does NOT mean a model is present — claiming otherwise sent
+    // short tasks down a dead on-device path for ~30s (18 Nov 2026).
+    // Until detection answers, assume NO on-device model: cloud is the
+    // safe default and never strands the user.
+    nano: false,
+    // nanoStatus (pill text): "checking" | "ready" | "downloadable" | "unavailable"
+    nanoStatus: "checking",
+    cloudModel: cloudModel || MODELS.cloudDefault,
     maxNoteChars: maxNoteChars || LIMITS.maxNoteChars,
   };
 
@@ -44,10 +53,19 @@ export function initUI({ env, store, ai, cloudModel, maxNoteChars }) {
   function renderStatus() {
     netPill.textContent = navigator.onLine ? "● Online" : "○ Offline";
     netPill.className = "pill " + (navigator.onLine ? "pill-ok" : "pill-warn");
-    nanoPill.textContent = state.nano
-      ? "● Gemini Nano detected"
-      : "○ No on-device model — cloud will be used";
-    nanoPill.className = "pill " + (state.nano ? "pill-ok" : "pill-muted");
+    if (state.nanoStatus === "ready") {
+      nanoPill.textContent = "● Gemini Nano ready (on-device)";
+      nanoPill.className = "pill pill-ok";
+    } else if (state.nanoStatus === "downloadable") {
+      nanoPill.textContent = "○ On-device model not downloaded — cloud will be used";
+      nanoPill.className = "pill pill-muted";
+    } else if (state.nanoStatus === "checking") {
+      nanoPill.textContent = "… Checking on-device model";
+      nanoPill.className = "pill pill-muted";
+    } else {
+      nanoPill.textContent = "○ No on-device model — cloud will be used";
+      nanoPill.className = "pill pill-muted";
+    }
     backendPill.textContent = env.configured
       ? `● Firestore (${store.backend})`
       : "○ Demo mode — set up Firebase (SETUP.md)";
@@ -57,6 +75,27 @@ export function initUI({ env, store, ai, cloudModel, maxNoteChars }) {
   window.addEventListener("online", renderStatus);
   window.addEventListener("offline", renderStatus);
   renderStatus();
+
+  // Real on-device support check. LanguageModel.availability() returns
+  // "available" | "downloadable" | "downloading" | "unavailable".
+  // Only "available" counts for routing: "downloadable" means the model
+  // still has to be fetched, so short tasks would stall on-device.
+  async function detectNano() {
+    let status = "unavailable";
+    try {
+      if ("LanguageModel" in window && typeof window.LanguageModel?.availability === "function") {
+        const avail = await window.LanguageModel.availability();
+        if (avail === "available") status = "ready";
+        else if (avail === "downloadable" || avail === "downloading") status = "downloadable";
+      }
+    } catch (e) {
+      // No Prompt API or detection failed: no on-device model.
+    }
+    state.nanoStatus = status;
+    state.nano = status === "ready";
+    renderStatus();
+  }
+  detectNano();
 
   // --- notes list ---
   const listEl = $("notes-list");
@@ -124,70 +163,116 @@ export function initUI({ env, store, ai, cloudModel, maxNoteChars }) {
     panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
+  // Visible working state: the first Summarize click used to show nothing
+  // for ~30s while the on-device attempt timed out. The panel now says
+  // "Working…" immediately, and the AI buttons lock until the call ends.
+  function showWorking(kind) {
+    panel.hidden = false;
+    kindEl.textContent = kind;
+    reasonEl.textContent = "";
+    textEl.textContent = "Working — contacting the AI model…";
+    metaEl.textContent = "";
+    sourceBadge.className = "badge";
+    sourceBadge.textContent = "Working…";
+    panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function setBusy(busy) {
+    ["ask-btn", "plan-btn", "download-model"].forEach((id) => {
+      const el = $(id);
+      if (el) el.disabled = busy;
+    });
+    listEl.querySelectorAll("button[data-act]").forEach((b) => {
+      b.disabled = busy;
+    });
+  }
+
+  // One AI attempt chain. Throws the last error if every attempt fails.
+  //   1. The routed target (on-device or cloud).
+  //   2. Cloud retry when the on-device attempt failed at runtime
+  //      (unless the user forced on-device, or offline).
+  //   3. Fallback cloud model (gemini-3.5-flash-lite) when a cloud attempt
+  //      failed with an overload error (HTTP 429/500/503, "high demand").
+  //      Auth (401/403) and not-found (404) errors end the chain at once:
+  //      another model would fail the same way.
+  async function attemptAI(prompt, decision) {
+    const attempts = [{ target: decision.target, cloudModel: state.cloudModel, reason: decision.reason }];
+    if (decision.target === TARGETS.ON_DEVICE && state.preference !== "device" && navigator.onLine) {
+      attempts.push({
+        target: TARGETS.IN_CLOUD,
+        cloudModel: state.cloudModel,
+        reason: "On-device failed, retried in cloud.",
+      });
+    }
+    attempts.push({
+      target: TARGETS.IN_CLOUD,
+      cloudModel: MODELS.cloudFallback,
+      reason: "Cloud model overloaded, retried with fallback model.",
+    });
+    let lastError = null;
+    for (let i = 0; i < attempts.length; i++) {
+      const a = attempts[i];
+      const isFallback = i === attempts.length - 1;
+      if (isFallback) {
+        if (!navigator.onLine) break; // no point calling the cloud offline
+        if (!lastError || !isOverloadedError(lastError)) break;
+        if (a.cloudModel === state.cloudModel) break; // fallback == primary
+      }
+      try {
+        const model = createModel(ai, {
+          target: a.target,
+          preference: state.preference,
+          cloudModel: a.cloudModel,
+          systemPrompt: SYSTEM_PROMPT,
+        });
+        const out = await generate(model, prompt);
+        return { ...out, reason: a.reason };
+      } catch (e) {
+        lastError = e;
+        if (a.target === TARGETS.ON_DEVICE && state.preference === "device") break;
+        if (a.target === TARGETS.IN_CLOUD && !isOverloadedError(e)) break;
+      }
+    }
+    throw lastError;
+  }
+
   // --- the hybrid run: route, then call the model ---
   async function runAI(kind, prompt, noteChars) {
-    const decision = routeRequest({
-      kind,
-      promptChars: prompt.length,
-      noteChars,
-      online: navigator.onLine,
-      nanoAvailable: state.nano,
-      preference: state.preference,
-      limits: { askContextChars: LIMITS.askContextChars, promptCapChars: LIMITS.promptCapChars },
-    });
-    if (decision.target === UNAVAILABLE) {
-      showAnswer({ kind, text: decision.reason, source: "NONE", reason: decision.reason, ms: 0 });
-      return;
-    }
-    if (!env.configured || !ai) {
-      const demo = demoAnswer(kind, prompt);
-      showAnswer({
-        kind,
-        text: demo.text,
-        source: "DEMO",
-        reason: "Demo mode — set up Firebase (see SETUP.md) for real hybrid AI.",
-        ms: 0,
-      });
-      return;
-    }
+    setBusy(true);
+    showWorking(kind);
     try {
-      const model = createModel(ai, {
-        target: decision.target,
+      const decision = routeRequest({
+        kind,
+        promptChars: prompt.length,
+        noteChars,
+        online: navigator.onLine,
+        nanoAvailable: state.nano,
         preference: state.preference,
-        cloudModel: state.cloudModel,
-        systemPrompt: SYSTEM_PROMPT,
+        limits: { askContextChars: LIMITS.askContextChars, promptCapChars: LIMITS.promptCapChars },
       });
-      const out = await generate(model, prompt);
+      if (decision.target === UNAVAILABLE) {
+        showAnswer({ kind, text: decision.reason, source: "NONE", reason: decision.reason, ms: 0 });
+        return;
+      }
+      if (!env.configured || !ai) {
+        const demo = demoAnswer(kind, prompt);
+        showAnswer({
+          kind,
+          text: demo.text,
+          source: "DEMO",
+          reason: "Demo mode — set up Firebase (see SETUP.md) for real hybrid AI.",
+          ms: 0,
+        });
+        return;
+      }
+      const out = await attemptAI(prompt, decision);
       let text = out.text;
       if (kind === "tasks") text = parseTasks(text).map((t) => "• " + t).join("\n");
-      showAnswer({ kind, text, source: out.source, reason: decision.reason, ms: out.ms });
+      showAnswer({ kind, text, source: out.source, reason: out.reason, ms: out.ms });
     } catch (e) {
-      // On-device failed at runtime: retry once in the cloud (unless forced).
-      if (decision.target === TARGETS.ON_DEVICE && state.preference !== "device" && navigator.onLine) {
-        try {
-          const model = createModel(ai, {
-            target: TARGETS.IN_CLOUD,
-            preference: state.preference,
-            cloudModel: state.cloudModel,
-            systemPrompt: SYSTEM_PROMPT,
-          });
-          const out = await generate(model, prompt);
-          let text = out.text;
-          if (kind === "tasks") text = parseTasks(text).map((t) => "• " + t).join("\n");
-          showAnswer({
-            kind,
-            text,
-            source: out.source,
-            reason: "On-device failed, retried in cloud.",
-            ms: out.ms,
-          });
-          return;
-        } catch (e2) {
-          showAnswer({ kind, text: "AI call failed: " + e2.message, source: "NONE", reason: "Error", ms: 0 });
-          return;
-        }
-      }
       showAnswer({ kind, text: "AI call failed: " + e.message, source: "NONE", reason: "Error", ms: 0 });
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -214,8 +299,17 @@ export function initUI({ env, store, ai, cloudModel, maxNoteChars }) {
     const ok = await ensureDeviceModel(model, (p) => {
       prog.textContent = `Downloading on-device model… ${p}%`;
     });
-    prog.textContent = ok ? "On-device model ready." : "Download not supported on this device — cloud will be used.";
-    state.nano = ok || state.nano;
+    if (ok) {
+      state.nano = true;
+      state.nanoStatus = "ready";
+      prog.textContent = "On-device model ready.";
+    } else {
+      // Honest state: a failed download means no usable on-device model
+      // on this device — do not keep a stale "detected" claim.
+      state.nano = false;
+      state.nanoStatus = "unavailable";
+      prog.textContent = "Download not supported on this device — cloud will be used.";
+    }
     btn.disabled = false;
     renderStatus();
   });

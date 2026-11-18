@@ -6,8 +6,20 @@
 //       inCloudParams: { model, generationConfig },
 //       onDeviceParams: { createOptions: { expectedInputs, expectedOutputs, initialPrompts } } })
 //   - result.response.inferenceSource is "ON_DEVICE" or "IN_CLOUD" (JS SDK >= 12.5.0)
-//   - default cloud fallback model is gemini-3.5-flash-lite (JS SDK >= 13.0.0)
 //   - model.initializeDeviceModel(progressCb) downloads the on-device model.
+//
+// LIVE-TEST FINDINGS (18 Nov 2026, GitHub Pages, Chrome without Nano):
+//   - ALL Firebase AI Logic calls go through the Firebase AI Logic proxy
+//     endpoint firebasevertexai.googleapis.com/v1beta/projects/.../models/...,
+//     even with GoogleAIBackend() — that URL is by design, not a bug.
+//   - The HYBRID cloud leg failed there: HTTP 500 "This model is currently
+//     experiencing high demand" (Summarize, Ask) on the deprecated
+//     gemini-3.5-flash, and HTTP 401 "missing required authentication
+//     credential" (Season plan). So the cloud leg now uses a PLAIN cloud
+//     model (no InferenceMode, no onDeviceParams) — the standard documented
+//     cloud path — with the current stable model gemini-3.8-flash.
+//   - The hybrid model is kept ONLY for the on-device leg (real Chrome with
+//     Gemini Nano), where it answers locally. See createModel().
 import { getAI, getGenerativeModel, GoogleAIBackend, InferenceMode } from "firebase/ai";
 import { MODELS } from "./config.js";
 
@@ -15,10 +27,12 @@ const Mode = InferenceMode || null;
 
 function modeFor(target, preference) {
   if (!Mode) return undefined; // SDK default is on-device-first with cloud fallback.
-  if (target === "ON_DEVICE") {
-    return preference === "device" ? Mode.ONLY_ON_DEVICE : Mode.PREFER_ON_DEVICE;
-  }
-  return preference === "cloud" ? Mode.ONLY_IN_CLOUD : Mode.PREFER_IN_CLOUD;
+  // Only ON_DEVICE ever reaches here: IN_CLOUD returns a plain cloud
+  // model before modeFor is called. ALWAYS only-on-device: the hybrid
+  // model's own cloud fallback is the broken path (500/401 on 18 Nov
+  // 2026). On-device failure must throw fast so ui.js can retry with the
+  // plain cloud model instead of waiting on the SDK's internal fallback.
+  return Mode.ONLY_ON_DEVICE;
 }
 
 /** Create the Firebase AI Logic client (Gemini Developer API backend). */
@@ -26,8 +40,19 @@ export function createAI(firebaseApp) {
   return getAI(firebaseApp, { backend: new GoogleAIBackend() });
 }
 
+/** Plain cloud model — the standard Firebase AI Logic cloud path.
+ * No InferenceMode, no onDeviceParams. Used for every IN_CLOUD request:
+ * the hybrid cloud leg failed live (see header), the plain model does
+ * not go through the hybrid code path. */
+export function createCloudModel(ai, cloudModel) {
+  return getGenerativeModel(ai, {
+    model: cloudModel || MODELS.cloudDefault,
+    generationConfig: { maxOutputTokens: 1024 },
+  });
+}
+
 /**
- * Build a hybrid GenerativeModel for one request.
+ * Build a GenerativeModel for one request.
  * @param {object} opts
  * @param {"ON_DEVICE"|"IN_CLOUD"} opts.target  from routeRequest()
  * @param {"auto"|"device"|"cloud"} opts.preference  user mode selector
@@ -35,6 +60,14 @@ export function createAI(firebaseApp) {
  * @param {string} opts.systemPrompt  system prompt for the on-device model
  */
 export function createModel(ai, { target, preference, cloudModel, systemPrompt }) {
+  // Cloud leg: plain cloud model (see createCloudModel). Never a hybrid
+  // model — the hybrid cloud leg failed live on 18 Nov 2026.
+  if (target === "IN_CLOUD") return createCloudModel(ai, cloudModel);
+  // On-device leg: hybrid model. mode is ONLY_ON_DEVICE (see modeFor):
+  // on-device failure must throw immediately so ui.js can retry with the
+  // plain cloud model — the hybrid model's own cloud fallback is the
+  // broken path (500/401 on 18 Nov 2026). inCloudParams stays set so the
+  // hybrid model definition is complete, with the current cloud model.
   const options = {
     inCloudParams: {
       model: cloudModel || MODELS.cloudDefault,
@@ -75,6 +108,20 @@ export async function generate(model, prompt) {
     source: response.inferenceSource || "UNKNOWN",
     ms: Math.round(performance.now() - started),
   };
+}
+
+/** True when the error looks like a transient server/overload failure
+ * (HTTP 429/500/502/503/504, "high demand", "overloaded",
+ * "unavailable", "resource exhausted", quota/rate-limit) — worth one
+ * retry with the fallback cloud model. Auth (401/403) and not-found
+ * (404) errors are NOT overload: retrying those with another model is
+ * pointless, so they return false. */
+export function isOverloadedError(e) {
+  const msg = String((e && (e.message || e)) || "").toLowerCase();
+  if (/401|403|404|unauthenticated|permission|not found/.test(msg)) return false;
+  return /429|500|502|503|504|overload|high demand|unavailable|resource-exhausted|resource exhausted|rate limit|quota|capacity|try again/.test(
+    msg
+  );
 }
 
 /** Download the on-device model (Chrome) with a progress callback (0-100). */

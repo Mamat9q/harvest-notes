@@ -32,7 +32,8 @@ plan, GitHub Pages). No paid service is needed at any step.
    ```
    Click **Publish**.
 6. **Build → Remote Config → Add parameter:**
-   - `cloud_model` = `gemini-3.5-flash` (string)
+   - `cloud_model` = `gemini-3.8-flash` (string — current stable Flash;
+     do NOT use `gemini-3.5-flash`, deprecated in the Developer API Oct 2026)
    - `max_note_chars` = `20000` (number)
    Click **Publish changes**.
 7. **App Check (optional but recommended):**

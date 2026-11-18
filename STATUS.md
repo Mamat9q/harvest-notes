@@ -11,10 +11,17 @@ Prize claim needs IRS Form W-8BEN (non-US) — KTP available.
 Web (Chrome) target → competes for Best Web/Chrome App ($3,000) + Grand ($10,000).
 
 - Zero-build static app; Firebase JS SDK 13.4.0 via CDN import map.
-- `src/ai.js` — real Firebase AI Logic hybrid calls (verified API):
-  `PREFER_ON_DEVICE` / `ONLY_ON_DEVICE` / `PREFER_IN_CLOUD` / `ONLY_IN_CLOUD`,
-  `inCloudParams` (gemini-3.5-flash), `onDeviceParams` (Chrome Prompt API),
-  `response.inferenceSource` badge, `initializeDeviceModel` download.
+- `src/ai.js` — Firebase AI Logic: hybrid model ONLY for the on-device leg
+  (`ONLY_ON_DEVICE`, fast-fail so ui.js can retry); PLAIN cloud model
+  (`getGenerativeModel(ai, { model })`, no InferenceMode) for every
+  IN_CLOUD request, model gemini-3.8-flash + gemini-3.5-flash-lite fallback
+  on overload errors. See "AI layer fix" below.
+- `src/ui.js` — honest Nano detection (`LanguageModel.availability()`,
+  pill shows ready / not-downloaded / none), visible "Working…" state +
+  button lock during AI calls, attempt chain: routed target → cloud
+  retry → fallback cloud model on overload (401/403/404 end the chain).
+- `src/firebase.js` — Remote Config `cloud_model` override guard: a stale
+  value naming a deprecated/shut-down model is replaced by the default.
 - `src/router.js` — pure routing policy, **13/13 unit tests pass** (`npm test`).
 - `src/firebase.js` — Auth anonymous, Firestore offline persistence,
   App Check (debug token on localhost), Remote Config (cloud_model, max_note_chars).
@@ -46,7 +53,38 @@ Web (Chrome) target → competes for Best Web/Chrome App ($3,000) + Grand ($10,0
    (only if image generation or other billing-required models are added; the
    current text-only app does NOT need it).
 
-## Key sources (verified 18 Nov 2026)
+## AI layer fix (18 Nov 2026, ~16:40 WIB)
+
+Live Chrome test on https://mamat9q.github.io/harvest-notes/ (16:25–16:32 WIB):
+page + notes fine, but ALL THREE AI features failed — Summarize/Ask HTTP 500
+"This model is currently experiencing high demand", Season plan HTTP 401
+"Request is missing required authentication credential", model download
+"not supported on this device" (expected in that test browser).
+
+ROOT CAUSE (verified from Firebase docs + Gemini model pages, 18 Nov 2026):
+1. `firebasevertexai.googleapis.com/v1beta/projects/.../models/...:generateContent`
+   is the Firebase AI Logic proxy endpoint for BOTH backends — the URL is by
+   design, not a backend mix-up. The hybrid cloud leg is what failed there.
+2. The cloud model was `gemini-3.5-flash` — deprecated in the Gemini
+   Developer API on 8 Oct 2026 (requests auto-route to gemini-3.6-flash).
+   `gemini-2.5-flash` (deprecated, access-limited for new projects) and
+   `gemini-2.0-flash` (shut down 1 Jun 2026) are also unusable. Current
+   stable free models: `gemini-3.8-flash` (newest, recommended) and
+   `gemini-3.5-flash-lite`.
+3. The Nano pill lied: `LanguageModel in window` only proves the Prompt API
+   object exists, not that a model is on the device — so short tasks were
+   routed on-device and stalled ~30s before failing.
+
+FIX (this push): cloud leg = plain cloud model, gemini-3.8-flash, fallback
+gemini-3.5-flash-lite on overload (429/500/503); hybrid model kept only for
+the on-device leg with ONLY_ON_DEVICE (fast fail → ui.js cloud retry);
+Remote Config deprecated-model guard; Nano pill from
+`LanguageModel.availability()` (ready / downloadable / none); visible
+"Working…" state + button lock during AI calls.
+NOT YET VERIFIED: end-to-end cloud call. The curl probe (Gemini Developer
+API + firebasevertexai endpoint, gemini-3.5/2.5/2.0-flash) never ran — its
+network approval timed out unanswered. Re-run curl + the live Chrome test
+after approval before calling this fixed.
 
 - Devpost: https://firebasehybridaihackathon.devpost.com/
 - Rules (eligibility, W-8BEN, dates): https://firebasehybridaihackathon.devpost.com/rules
