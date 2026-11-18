@@ -98,7 +98,14 @@ MODEL SWAP (this push): cloudDefault is now gemini-3.5-flash-lite (the
 model verified answering live), cloudFallback gemini-3.8-flash. Remote
 Config console value still says gemini-3.5-flash — update it to
 gemini-3.5-flash-lite (code guard overrides it meanwhile). RE-TEST: live
-Chrome test on the Pages URL still needed after this push.
+RE-TEST (this push): live Chrome test 18 Nov 16:52-17:19 WIB BLOCKED — new build
+never appeared in the browser (pill stayed "Gemini Nano detected" after 6
+reloads incl. ?v=1701). Root cause: sw.js cache-first with a NEVER-BUMPED
+cache name "harvest-notes-v1" — the service worker kept serving the old
+shell; Pages itself was already serving the new files (verified via curl:
+config.js lite default, ui.js "Working", ai.js createCloudModel, Age: 0).
+Fix: CACHE → "harvest-notes-v2" + network-first fetch (cache = offline
+fallback only). Bump the cache name on every shell-changing deploy.
 
 - Devpost: https://firebasehybridaihackathon.devpost.com/
 - Rules (eligibility, W-8BEN, dates): https://firebasehybridaihackathon.devpost.com/rules

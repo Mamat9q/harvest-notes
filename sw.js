@@ -1,6 +1,11 @@
 // Offline app shell for Harvest Notes. Same-origin GETs only;
 // Firebase and CDN requests always go to the network.
-const CACHE = "harvest-notes-v1";
+//
+// CACHE VERSION: bump this string on every deploy that changes the app
+// shell, otherwise the cache-first fetch below keeps serving the old
+// build forever. v2 (18 Nov 2026): network-first fetch so a new deploy
+// reaches users on the next visit; cache is the offline fallback.
+const CACHE = "harvest-notes-v2";
 const SHELL = [
   "./",
   "./index.html",
@@ -32,17 +37,16 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   if (new URL(e.request.url).origin !== location.origin) return;
+  // Network-first: a new deploy reaches the user on the next visit
+  // instead of being shadowed by the old cache (the v1 bug, 18 Nov 2026).
+  // Offline, the cache answers. Successful network responses refresh it.
   e.respondWith(
-    caches.match(e.request).then(
-      (hit) =>
-        hit ||
-        fetch(e.request)
-          .then((res) => {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(e.request, copy));
-            return res;
-          })
-          .catch(() => caches.match("./index.html"))
-    )
+    fetch(e.request)
+      .then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, copy));
+        return res;
+      })
+      .catch(() => caches.match(e.request).then((hit) => hit || caches.match("./index.html")))
   );
 });
