@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Harvest Notes — offline-first AI field journal for smallholder farmers. Gemini Nano on-device + Gemini Flash cloud, hybrid via Firebase AI Logic." />
+  <meta name="theme-color" content="#2e7d32" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./src/styles.css" />
+  <title>Harvest Notes — Offline-first AI field journal</title>
+  <script type="importmap">
+    {
+      "imports": {
+        "firebase/app": "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js",
+        "firebase/auth": "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js",
+        "firebase/app-check": "https://www.gstatic.com/firebasejs/13.4.0/firebase-app-check.js",
+        "firebase/remote-config": "https://www.gstatic.com/firebasejs/13.4.0/firebase-remote-config.js",
+        "firebase/ai": "https://www.gstatic.com/firebasejs/13.4.0/firebase-ai.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <header class="app-header">
+    <h1>🌾 Harvest Notes</h1>
+    <p class="tagline">Offline-first AI field journal for smallholder farmers — Gemini Nano on-device, Gemini Flash in the cloud, one hybrid SDK.</p>
+    <div class="status-bar">
+      <span id="net-pill" class="pill pill-muted">…</span>
+      <span id="nano-pill" class="pill pill-muted">…</span>
+      <span id="backend-pill" class="pill pill-muted">…</span>
+    </div>
+    <div id="setup-banner" class="banner" hidden>
+      <strong>Demo mode.</strong> No Firebase project is configured yet, so notes are stored
+      locally and AI answers are extractive demos. Set up the free Firebase project
+      (5 minutes, see <code>SETUP.md</code>) to enable real hybrid AI.
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>New field note</h2>
+      <form id="note-form">
+        <label>Title <input id="note-title" type="text" maxlength="120" placeholder="e.g. North plot — rice, week 6" /></label>
+        <label>Crop
+          <select id="note-crop">
+            <option>Rice</option>
+            <option>Maize</option>
+            <option>Cassava</option>
+            <option>Vegetables</option>
+            <option>Coffee</option>
+            <option>Fruit</option>
+            <option>Other</option>
+          </select>
+        </label>
+        <label>Note
+          <textarea id="note-body" rows="4" maxlength="20000" placeholder="What did you see, do, or plan today? Watering, pests, weather, prices…" required></textarea>
+        </label>
+        <button type="submit">Save note</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Ask your notes</h2>
+      <div class="ask-row">
+        <input id="ask-input" type="text" maxlength="500" placeholder="e.g. When did I last water the tomatoes?" />
+        <button id="ask-btn">Ask</button>
+      </div>
+      <div class="ask-row">
+        <button id="plan-btn">Season plan — next 4 weeks (all notes)</button>
+      </div>
+      <div class="ask-row">
+        <label class="inline">AI mode
+          <select id="mode-select">
+            <option value="auto" selected>Auto (hybrid — recommended)</option>
+            <option value="device">On-device only</option>
+            <option value="cloud">Cloud only</option>
+          </select>
+        </label>
+        <button id="download-model">Download on-device model</button>
+        <span id="model-progress" class="muted"></span>
+      </div>
+      <p class="hint">
+        Short, private work runs on-device (Gemini Nano — free, private, works offline).
+        Long or complex work goes to the cloud (Gemini Flash). Every answer shows which
+        model answered it.
+      </p>
+    </section>
+
+    <section id="ai-panel" class="card ai-panel" hidden>
+      <div class="ai-head">
+        <span id="ai-source" class="badge">…</span>
+        <span id="ai-kind" class="muted"></span>
+        <span id="ai-meta" class="muted"></span>
+      </div>
+      <p id="ai-reason" class="reason"></p>
+      <pre id="ai-text" class="ai-text"></pre>
+    </section>
+
+    <section>
+      <h2>Field notes</h2>
+      <p id="notes-empty" class="muted">No notes yet. Add your first field note above — the AI can only work with what you wrote down.</p>
+      <div id="notes-list" class="notes-grid"></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Harvest Notes · Built for #BuildHybridAI 2026 · Firebase AI Logic hybrid inference (Gemini Nano on-device + Gemini Flash cloud) · Firestore · Auth · App Check · Remote Config · Apache-2.0</p>
+  </footer>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
