@@ -25,15 +25,19 @@ export const CONFIGURED = firebaseConfig.apiKey !== "YOUR_API_KEY";
 
 export const MODELS = {
   // Cloud model used when the router picks IN_CLOUD (overridable by Remote Config).
-  // gemini-3.8-flash: newest stable Flash, free tier, Google's current
-  // recommendation for new projects (Nov 2026). gemini-3.5-flash was
-  // deprecated in the Gemini Developer API on 8 Oct 2026 (requests
-  // auto-route to gemini-3.6-flash) and failed live with HTTP 500 on
-  // 18 Nov 2026 — do not revert to it.
-  cloudDefault: "gemini-3.8-flash",
+  // gemini-3.5-flash-lite: verified LIVE via the Firebase AI Logic proxy on
+  // 18 Nov 2026 16:52 WIB (anonymous Auth token + API key + App ID, header
+  // "Authorization: Firebase <token>") — answered while gemini-3.8-flash
+  // returned HTTP 500 "high demand" on the same proxy at the same time.
+  // gemini-3.5-flash was deprecated in the Gemini Developer API on
+  // 8 Oct 2026 (requests auto-route to gemini-3.6-flash) and failed live
+  // with HTTP 500 on 18 Nov 2026 — do not revert to it.
+  cloudDefault: "gemini-3.5-flash-lite",
   // Fallback if the configured cloud model is unavailable.
-  // gemini-3.5-flash-lite is still Stable with a free tier (Nov 2026).
-  cloudFallback: "gemini-3.5-flash-lite",
+  // gemini-3.8-flash is the newest stable Flash and Google's current
+  // recommendation for new projects (Nov 2026); it 500'd on high demand
+  // at the 18 Nov live check, so it is the fallback, not the default.
+  cloudFallback: "gemini-3.8-flash",
 };
 
 // Model IDs that must never be used as the cloud model: shut down

@@ -75,16 +75,30 @@ ROOT CAUSE (verified from Firebase docs + Gemini model pages, 18 Nov 2026):
    object exists, not that a model is on the device — so short tasks were
    routed on-device and stalled ~30s before failing.
 
-FIX (this push): cloud leg = plain cloud model, gemini-3.8-flash, fallback
+FIX (push 067c6e03): cloud leg = plain cloud model, gemini-3.8-flash, fallback
 gemini-3.5-flash-lite on overload (429/500/503); hybrid model kept only for
 the on-device leg with ONLY_ON_DEVICE (fast fail → ui.js cloud retry);
 Remote Config deprecated-model guard; Nano pill from
 `LanguageModel.availability()` (ready / downloadable / none); visible
 "Working…" state + button lock during AI calls.
-NOT YET VERIFIED: end-to-end cloud call. The curl probe (Gemini Developer
-API + firebasevertexai endpoint, gemini-3.5/2.5/2.0-flash) never ran — its
-network approval timed out unanswered. Re-run curl + the live Chrome test
-after approval before calling this fixed.
+
+LIVE VERIFICATION (curl, 18 Nov 2026 16:52 WIB, by parent — the SDK's exact
+request shape, read from firebase-ai.js 13.4.0): anonymous Auth token via
+Identity Toolkit + `Authorization: Firebase <token>` + `x-goog-api-key` +
+`X-Firebase-Appid` against the firebasevertexai proxy:
+- gemini-3.8-flash → HTTP 500 "This model is currently experiencing high
+  demand" (capacity, not auth — the newest model is overloaded right now).
+- gemini-3.5-flash-lite → ANSWERED ("Hello, it's nice to meet you!").
+- Direct generativelanguage.googleapis.com calls → HTTP 403 for both
+  models: the Firebase web key is restricted to Firebase APIs, expected —
+  the proxy is the only path the SDK uses. A first probe with
+  `Authorization: Bearer <token>` also 401'd — the proxy wants the
+  `Firebase` scheme, not `Bearer`; that was a probe error, not an app bug.
+MODEL SWAP (this push): cloudDefault is now gemini-3.5-flash-lite (the
+model verified answering live), cloudFallback gemini-3.8-flash. Remote
+Config console value still says gemini-3.5-flash — update it to
+gemini-3.5-flash-lite (code guard overrides it meanwhile). RE-TEST: live
+Chrome test on the Pages URL still needed after this push.
 
 - Devpost: https://firebasehybridaihackathon.devpost.com/
 - Rules (eligibility, W-8BEN, dates): https://firebasehybridaihackathon.devpost.com/rules

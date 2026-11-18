@@ -32,8 +32,10 @@ plan, GitHub Pages). No paid service is needed at any step.
    ```
    Click **Publish**.
 6. **Build → Remote Config → Add parameter:**
-   - `cloud_model` = `gemini-3.8-flash` (string — current stable Flash;
-     do NOT use `gemini-3.5-flash`, deprecated in the Developer API Oct 2026)
+   - `cloud_model` = `gemini-3.5-flash-lite` (string — verified live via the
+     Firebase AI Logic proxy 18 Nov 2026; do NOT use `gemini-3.5-flash`,
+     deprecated in the Developer API Oct 2026; `gemini-3.8-flash` is the
+     fallback model — it returned HTTP 500 "high demand" at the same live check)
    - `max_note_chars` = `20000` (number)
    Click **Publish changes**.
 7. **App Check (optional but recommended):**

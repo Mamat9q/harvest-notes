@@ -191,7 +191,7 @@ export function initUI({ env, store, ai, cloudModel, maxNoteChars }) {
   //   1. The routed target (on-device or cloud).
   //   2. Cloud retry when the on-device attempt failed at runtime
   //      (unless the user forced on-device, or offline).
-  //   3. Fallback cloud model (gemini-3.5-flash-lite) when a cloud attempt
+  //   3. Fallback cloud model (gemini-3.8-flash) when a cloud attempt
   //      failed with an overload error (HTTP 429/500/503, "high demand").
   //      Auth (401/403) and not-found (404) errors end the chain at once:
   //      another model would fail the same way.
