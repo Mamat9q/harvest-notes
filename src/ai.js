@@ -5,7 +5,9 @@
 //   - getGenerativeModel(ai, { mode: InferenceMode.PREFER_ON_DEVICE,
 //       inCloudParams: { model, generationConfig },
 //       onDeviceParams: { createOptions: { expectedInputs, expectedOutputs, initialPrompts } } })
-//   - result.response.inferenceSource is "ON_DEVICE" or "IN_CLOUD" (JS SDK >= 12.5.0)
+//   - result.response.inferenceSource is "ON_DEVICE" or "IN_CLOUD" per the
+//     docs, but the shipped SDK returns it lowercase ("on_device" /
+//     "in_cloud") — generate() normalizes it to uppercase (18 Nov 2026).
 //   - model.initializeDeviceModel(progressCb) downloads the on-device model.
 //
 // LIVE-TEST FINDINGS (18 Nov 2026, GitHub Pages, Chrome without Nano):
@@ -105,7 +107,10 @@ export async function generate(model, prompt) {
   const response = result.response;
   return {
     text: response.text(),
-    source: response.inferenceSource || "UNKNOWN",
+    // The SDK returns inferenceSource lowercase ("in_cloud" / "on_device")
+    // in this version — normalize to uppercase so the UI badge mapping
+    // ("Gemini Flash · cloud" / "Gemini Nano · on-device") matches.
+    source: String(response.inferenceSource || "UNKNOWN").toUpperCase(),
     ms: Math.round(performance.now() - started),
   };
 }
