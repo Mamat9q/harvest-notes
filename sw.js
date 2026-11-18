@@ -5,7 +5,8 @@
 // shell, otherwise the cache-first fetch below keeps serving the old
 // build forever. v2 (18 Nov 2026): network-first fetch so a new deploy
 // reaches users on the next visit; cache is the offline fallback.
-const CACHE = "harvest-notes-v2";
+// v3 (18 Nov 2026): ui.js double-submit guard.
+const CACHE = "harvest-notes-v3";
 const SHELL = [
   "./",
   "./index.html",

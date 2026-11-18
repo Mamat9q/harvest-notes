@@ -316,14 +316,22 @@ export function initUI({ env, store, ai, cloudModel, maxNoteChars }) {
 
   $("note-form").addEventListener("submit", async (e) => {
     e.preventDefault();
+    const saveBtn = e.target.querySelector('button[type="submit"]');
+    if (saveBtn?.disabled) return; // double-submit guard: a fast second
+    // click used to create a duplicate Firestore doc (seen 18 Nov 2026).
     const title = $("note-title").value.trim();
     const crop = $("note-crop").value;
     const body = $("note-body").value.trim();
     if (!body) return;
-    await store.add({ title: title || "Untitled note", body: body.slice(0, state.maxNoteChars), crop });
-    $("note-title").value = "";
-    $("note-body").value = "";
-    await refreshNotes();
+    if (saveBtn) saveBtn.disabled = true;
+    try {
+      await store.add({ title: title || "Untitled note", body: body.slice(0, state.maxNoteChars), crop });
+      $("note-title").value = "";
+      $("note-body").value = "";
+      await refreshNotes();
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
   });
 
   listEl.addEventListener("click", async (e) => {
