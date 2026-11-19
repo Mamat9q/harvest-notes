@@ -67,18 +67,33 @@ Without a Firebase config the app runs in **demo mode**: notes in
 ## Tests
 
 ```bash
-npm test    # node:test, 13 router cases — no dependencies
+npm test    # node:test, 13 router cases + 11 prompt/helper cases = 24 — no dependencies
 npm run check  # syntax-check every source file
 ```
 
-## Submission checklist (Devpost)
+## Submission checklist (Devpost) — SUBMITTED 18 Nov 2026, ID 1310732
 
-- [ ] Firebase project configured (`src/config.js`, `SETUP.md`)
-- [ ] Public GitHub repo + Apache-2.0 LICENSE (this repo)
-- [ ] Hosted demo URL (GitHub Pages)
-- [ ] Demo video < 3 min, public on YouTube, English
-- [ ] Devpost text description (features, Firebase AI Logic use, value prop)
-- [ ] Submit before **Mon Nov 30, 2026, 2:00 PM PT** (Tue Dec 1, 05:00 WIB)
+Public page: https://devpost.com/software/harvest-notes-offline-first-ai-field-journal
+(Do NOT create a second submission — edit this one until the deadline.)
+
+- [x] Firebase project configured (`src/config.js`, `SETUP.md`)
+- [x] Public GitHub repo + Apache-2.0 LICENSE — https://github.com/Mamat9q/harvest-notes
+- [x] Hosted demo URL (GitHub Pages) — https://mamat9q.github.io/harvest-notes/
+- [x] Demo video < 3 min, public on YouTube, English — https://www.youtube.com/watch?v=GpNcv8W3LcY
+- [x] Devpost text description (features, Firebase AI Logic use, value prop)
+- [x] Submitted before **Mon Nov 30, 2026, 2:00 PM PT** (Tue Dec 1, 05:00 WIB)
+
+## 19 Nov 2026 improvements (this copy)
+
+- `src/prompts.js`: prompt builders + helpers split out of `ai.js` into a
+  pure, unit-tested module (ai.js re-exports them; ui.js unchanged).
+- Ask prompt fixed: the 18 Nov live test showed Ask answers were honest
+  but thin (just restated the note). It now asks for concrete next steps
+  tied to specific facts in the notes, and says plainly what is unknown
+  before adding any clearly-labeled general advice.
+- Tests: 13 router cases + 11 prompt/helper cases = **24 tests**.
+- Service-worker cache bumped to v4 (new file `src/prompts.js`).
+- `SETUP.md`: removed a stray tooling-brand mention from the public docs.
 
 ## License
 

@@ -6,7 +6,8 @@
 // build forever. v2 (18 Nov 2026): network-first fetch so a new deploy
 // reaches users on the next visit; cache is the offline fallback.
 // v3 (18 Nov 2026): ui.js double-submit guard.
-const CACHE = "harvest-notes-v3";
+// v4 (19 Nov 2026): prompts.js split out of ai.js (Ask prompt fix).
+const CACHE = "harvest-notes-v4";
 const SHELL = [
   "./",
   "./index.html",
@@ -15,6 +16,7 @@ const SHELL = [
   "./src/config.js",
   "./src/router.js",
   "./src/ai.js",
+  "./src/prompts.js",
   "./src/firebase.js",
   "./src/notes.js",
   "./src/ui.js",

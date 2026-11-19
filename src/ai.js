@@ -25,6 +25,19 @@
 import { getAI, getGenerativeModel, GoogleAIBackend, InferenceMode } from "firebase/ai";
 import { MODELS } from "./config.js";
 
+// Pure prompt builders + helpers live in prompts.js (no Firebase imports,
+// unit-tested) and are re-exported here so ui.js keeps importing from ai.js.
+export {
+  SYSTEM_PROMPT,
+  summarizePrompt,
+  tasksPrompt,
+  askPrompt,
+  planPrompt,
+  parseTasks,
+  demoAnswer,
+  isOverloadedError,
+} from "./prompts.js";
+
 const Mode = InferenceMode || null;
 
 function modeFor(target, preference) {
@@ -115,20 +128,6 @@ export async function generate(model, prompt) {
   };
 }
 
-/** True when the error looks like a transient server/overload failure
- * (HTTP 429/500/502/503/504, "high demand", "overloaded",
- * "unavailable", "resource exhausted", quota/rate-limit) — worth one
- * retry with the fallback cloud model. Auth (401/403) and not-found
- * (404) errors are NOT overload: retrying those with another model is
- * pointless, so they return false. */
-export function isOverloadedError(e) {
-  const msg = String((e && (e.message || e)) || "").toLowerCase();
-  if (/401|403|404|unauthenticated|permission|not found/.test(msg)) return false;
-  return /429|500|502|503|504|overload|high demand|unavailable|resource-exhausted|resource exhausted|rate limit|quota|capacity|try again/.test(
-    msg
-  );
-}
-
 /** Download the on-device model (Chrome) with a progress callback (0-100). */
 export async function ensureDeviceModel(model, onProgress) {
   if (model && typeof model.initializeDeviceModel === "function") {
@@ -145,55 +144,7 @@ export async function ensureDeviceModel(model, onProgress) {
   return false;
 }
 
-// --- prompt builders (one per AI feature) ---
 
-export const SYSTEM_PROMPT =
-  "You are Harvest Notes, a concise farming assistant for smallholder farmers. Plain English, short sentences, no made-up prices or dates.";
-
-export function summarizePrompt(note) {
-  return `Summarize this field note in 2-3 short sentences. Keep facts only, no advice.\n\n${note}`;
-}
-
-export function tasksPrompt(note) {
-  return `List the concrete jobs to do from this field note as a JSON array of short strings, for example ["Water the tomatoes", "Buy fertilizer"]. Output only the JSON array, nothing else.\n\n${note}`;
-}
-
-export function askPrompt(question, notesText) {
-  return `Answer the question using ONLY these field notes. If the notes do not say, say so plainly.\n\nNOTES:\n${notesText}\n\nQUESTION: ${question}`;
-}
-
-export function planPrompt(notesText) {
-  return `You are planning the next 4 weeks for a small farm. Using ONLY these field notes, write a short weekly plan: what to plant, water, feed, and watch for. Keep it practical and honest about what is unknown.\n\nNOTES:\n${notesText}`;
-}
-
-/** Parse the tasks JSON defensively; fall back to line-splitting. */
-export function parseTasks(text) {
-  try {
-    const match = text.match(/\[[\s\S]*\]/);
-    const arr = JSON.parse(match ? match[0] : text);
-    if (Array.isArray(arr)) return arr.map(String).filter(Boolean).slice(0, 10);
-  } catch (e) {
-    // fall through to line parsing
-  }
-  return text
-    .split(/\n/)
-    .map((s) => s.replace(/^[-*\d.)\s]+/, "").trim())
-    .filter(Boolean)
-    .slice(0, 10);
-}
-
-/**
- * Local demo fallback, used ONLY when no Firebase config is set (see config.js).
- * Extractive only — no fake AI claims. The UI always labels it "DEMO".
- */
-export function demoAnswer(kind, input) {
-  const sentences = input
-    .replace(/\s+/g, " ")
-    .split(/(?<=[.!?])\s+/)
-    .filter(Boolean);
-  if (kind === "tasks") {
-    const verbs = sentences.filter((s) => /need|must|should|water|plant|feed|buy|check|spray|harvest/i.test(s));
-    return { text: JSON.stringify((verbs.length ? verbs : sentences).slice(0, 5)), source: "DEMO", ms: 0 };
-  }
-  return { text: sentences.slice(0, 3).join(" "), source: "DEMO", ms: 0 };
-}
+// --- prompt builders + helpers (SYSTEM_PROMPT, summarizePrompt,
+// tasksPrompt, askPrompt, planPrompt, parseTasks, demoAnswer) live in
+// src/prompts.js and are re-exported at the top of this file. ---

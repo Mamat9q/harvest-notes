@@ -108,8 +108,61 @@ TWICE after saving — most likely a fast double-click on Save (submit
 button was not disabled during the async save). Fix (this push): disable
 the Save button while saving + SW cache v3.
 
+BADGE FIX 18 Nov 2026 ~17:35 WIB (commit e16d89f3): the demo recording
+caught that the AI badge showed the raw string "in_cloud" — the shipped
+SDK returns inferenceSource lowercase, but the UI only mapped uppercase
+"IN_CLOUD"/"ON_DEVICE". generate() now normalizes to uppercase, so the
+badge reads "Gemini Flash · cloud" as designed. 13/13 tests pass.
+
+DEMO VIDEO 18 Nov 2026 ~17:40 WIB: harvest-notes-demo.mp4 ready in
+~/workspace/buildhybridai/demo-video/ (1:48, 1280x720, H.264, silent,
+burned-in English captions). Recorded live in headless Chromium (Playwright
+recordVideo + ffmpeg, HAUNT pipeline): add note → Summarize → Extract tasks
+→ Ask → Season plan → offline (honest NONE state) → closing card. All 4 AI
+answers real, all badges "Gemini Flash · cloud" (no Nano in headless
+Chromium — routing explained in words on the title/closing cards). Upload
+to YouTube FILM DRAKOR still pending — needs the cloud browser
+(studio.youtube.com); vidIQ cannot upload. Metadata in demo-video/youtube.md.
+
 - Devpost: https://firebasehybridaihackathon.devpost.com/
 - Rules (eligibility, W-8BEN, dates): https://firebasehybridaihackathon.devpost.com/rules
 - Hybrid docs: https://firebase.google.com/docs/ai-logic/hybrid
 - Web hybrid config: https://firebase.google.com/docs/ai-logic/hybrid/web/configuration-options
 - Get started: https://firebase.google.com/docs/ai-logic/get-started
+
+DEVPOST SUBMITTED 18 Nov 2026 ~18:17 WIB (laptop Brave, account matlailpajri1):
+Submission ID 1310732. Public page: https://devpost.com/software/harvest-notes-offline-first-ai-field-journal
+Banner: "Project submitted! Continue to edit your project until the hackathon
+deadline: November 30, 2026 at 05:00pm EST."
+All 5 steps done. Step 4 gotchas: Devpost REQUIRES "Organization name (if
+applicable)" even for Individual submitters — filled "N/A". Platform = Web
+(Chrome) only. Tech-requirement text, demo URL (Pages), testing instructions
+(7 steps + notes), license URL (repo /blob/main/LICENSE), 3 eligibility
+checkboxes all ticked. Project name shortened to 46 chars (Devpost caps at
+60): "Harvest Notes — Offline-first AI field journal". Thumbnail left as
+default Devpost placeholder. Deadline 30 Nov 2026 14:00 PT (1 Dec 05:00 WIB);
+judging 10-16 Dec; winners ~21 Dec 2026. Still editable until deadline.
+
+## 19 Nov 2026 improvements (this copy, ~/workspace/buildhybridai-2026/)
+
+Snapshot of the submitted build + genuine fixes, NOT a new entry:
+- `src/prompts.js` NEW: prompt builders + helpers split out of ai.js into a
+  pure, unit-tested module (ai.js re-exports; ui.js unchanged). Ask prompt
+  fixed — the 18 Nov live test found Ask answers honest but thin (just
+  restated the note). It now asks for concrete next steps tied to specific
+  facts in the notes, says plainly what is unknown, and labels any general
+  advice as general advice, never as if from the notes.
+- Tests: 13 router + 11 prompts/helper = 24/24 pass (`npm test`).
+  `npm run check` clean (all 8 source files).
+- Local serve smoke test 19 Nov ~17:15 WIB: all 14 files HTTP 200,
+  prompts.js serves the new Ask wording, 22 element IDs present.
+- Live URLs re-checked 19 Nov ~17:15 WIB: Pages 200, Devpost page 200,
+  YouTube video 200.
+- SW cache v4 (new file prompts.js). SETUP.md: stray tooling-brand
+  mention scrubbed; repo-wide grep for "Muse"/"AI-built" = 0 hits.
+- Demo video unchanged (1:48, 108.0s) — the Ask fix changes answer
+  quality, not the demo flow; re-recording is optional.
+- TO PUSH before the deadline: copy these changes into
+  ~/workspace/buildhybridai/ (the GitHub-synced source) and push to
+  Mamat9q/harvest-notes so Pages serves v4. Do NOT create a second
+  Devpost submission — edit ID 1310732.

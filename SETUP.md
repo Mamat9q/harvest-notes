@@ -71,7 +71,7 @@ offline cache).
 
 1. Create repo `Mamat9q/harvest-notes` (public) via the browser (connector
    `create_repository` fails 403 — create in the browser, then add it to the
-   Muse GitHub App installation like the other entry repos).
+   GitHub App installation like the other entry repos).
 2. Push this directory (Apache-2.0 LICENSE included; `.gitignore` keeps junk out).
 3. **Settings → Pages → Deploy from branch → `main` / `/ (root)`** → the
    live URL is `https://mamat9q.github.io/harvest-notes/`. Verify it loads
